@@ -1,201 +1,273 @@
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
 import re
+from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlQueryModel
+from PyQt5.QtGui import QStandardItemModel, QStandardItem, QIntValidator
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QPushButton, QLabel, QLineEdit, QTableView, QHeaderView, QMenuBar, QGridLayout, QSpinBox, QInputDialog)
+from PyQt5.QtCore import QObject
+from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 
-
-class Ui_Form(QObject):
+class UIContainer(QObject):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        #Form.resize(1500, 900)
-        #Form.setMinimumSize(QtCore.QSize(1500, 900))
-        #Form.setMaximumSize(QtCore.QSize(1500, 900))
-        Form.setWindowTitle("Sales")
+        Form.setWindowTitle("POS System v.1.1")
+        Form.resize(1800, 900)
 
-        self.layoutWidget01 = QtWidgets.QWidget(Form)
-        self.layoutWidget01.setGeometry(QtCore.QRect(0, 0, 1200, 100))
-        self.layoutWidget01.setObjectName("layoutWidget01")
-        self.horizontalLayout_1 = QtWidgets.QHBoxLayout(self.layoutWidget01)
-        self.horizontalLayout_1.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_1.setObjectName("horizontalLayout_1")
+        # Menu Bar
+        self.menuBar = QMenuBar(Form)
+        for menu in ['Dashboard', 'Stock', 'Sales', 'Reports']:
+            self.menuBar.addAction(menu)
 
-        self.sortByChickenBtn = QtWidgets.QPushButton(self.layoutWidget01)
-        self.sortByChickenBtn.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByChickenBtn.setObjectName("sortByChickenBtn")
-        self.sortByChickenBtn.setText("Chicken")
-        self.horizontalLayout_1.addWidget(self.sortByChickenBtn)
+        # Category Buttons Layout
+        self.categoryLayout = QGridLayout()
+        self.categories = [
+            'Bakery', 'Beverages', 'Books',
+            'Electronics', 'Health_Beauty', 'Household',
+            'Stationery', 'Toys', 'Dell'
+        ]
+        
+        for i, category in enumerate(self.categories):
+            btn = QPushButton(category.replace('_', ' '))
+            btn.setMinimumSize(350, 100)
+            btn.setStyleSheet("font: 75 25pt; background-color: blue; color: white;")
+            self.categoryLayout.addWidget(btn, i//3, i%3)
 
-        self.sortByDrinkBtn = QtWidgets.QPushButton(self.layoutWidget01)
-        self.sortByDrinkBtn.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByDrinkBtn.setObjectName("sortByDrinkBtn")
-        self.sortByDrinkBtn.setText("Drink")
-        self.horizontalLayout_1.addWidget(self.sortByDrinkBtn)
+        # Product List Section
+        self.productSection = QVBoxLayout()
+        
+        # Search Bar
+        self.searchBar = QHBoxLayout()
+        self.addButton = QPushButton("Add +")
+        self.skuSearch = QLineEdit()
+        self.skuSearch.setPlaceholderText("SKU")
+        self.searchButton = QPushButton("Search")
+        for widget in [self.addButton, self.skuSearch, self.searchButton]:
+            self.searchBar.addWidget(widget)
+        
+        # Product Table
+        self.productTable = QTableView()
+        self.productTable.setMinimumHeight(400)
+        self.productTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        self.productSection.addLayout(self.searchBar)
+        self.productSection.addWidget(self.productTable)
 
-        self.sortByOtherBtn = QtWidgets.QPushButton(self.layoutWidget01)
-        self.sortByOtherBtn.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByOtherBtn.setObjectName("sortByOtherBtn")
-        self.sortByOtherBtn.setText("Other")
-        self.horizontalLayout_1.addWidget(self.sortByOtherBtn)
+        # Cart Section (Right side)
+        self.cartSection = QVBoxLayout()
+        
+        # Cart Header
+        self.cartHeader = QHBoxLayout()
+        for label in ['Item', 'Qty', 'Price']:
+            lbl = QLabel(label)
+            lbl.setStyleSheet("font: 75 12pt; color: white;")
+            self.cartHeader.addWidget(lbl)
 
-        self.layoutWidget_2 = QtWidgets.QWidget(Form)
-        self.layoutWidget_2.setGeometry(QtCore.QRect(0, 110, 1200, 100))
-        self.layoutWidget_2.setObjectName("layoutWidget_2")
-        self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.layoutWidget_2)
-        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        # Cart Items
+        self.cartList = QTableView()
+        self.cartList.setMinimumHeight(600)
+        
+        # Cart Total
+        self.totalSection = QHBoxLayout()
+        self.subTotalLabel = QLabel("Sub Total : ")
+        self.subTotalValue = QLabel("50")
+        self.discountLabel = QLabel("% : ")
+        self.discountValue = QSpinBox()
+        self.totalLabel = QLabel("Total Payment : ")
+        self.totalValue = QLabel("50")
+        self.payButton = QPushButton("Pay")
+        self.payButton.setStyleSheet("background-color: green; color: white; padding: 10px;")
+        
+        for widget in [self.subTotalLabel, self.subTotalValue, 
+                      self.discountLabel, self.discountValue,
+                      self.totalLabel, self.totalValue, self.payButton]:
+            self.totalSection.addWidget(widget)
 
-        self.sortByChickenBtn_2 = QtWidgets.QPushButton(self.layoutWidget_2)
-        self.sortByChickenBtn_2.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn_2.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn_2.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByChickenBtn_2.setObjectName("sortByChickenBtn_2")
-        self.sortByChickenBtn_2.setText("HP")
-        self.horizontalLayout_2.addWidget(self.sortByChickenBtn_2)
+        self.cartSection.addLayout(self.cartHeader)
+        self.cartSection.addWidget(self.cartList)
+        self.cartSection.addLayout(self.totalSection)
 
-        self.sortByDrinkBtn_2 = QtWidgets.QPushButton(self.layoutWidget_2)
-        self.sortByDrinkBtn_2.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn_2.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn_2.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByDrinkBtn_2.setObjectName("sortByDrinkBtn_2")
-        self.sortByDrinkBtn_2.setText("Apple")
-        self.horizontalLayout_2.addWidget(self.sortByDrinkBtn_2)
+        # Main Layout
+        self.mainLayout = QHBoxLayout()
+        self.leftSection = QVBoxLayout()
+        self.leftSection.addLayout(self.categoryLayout)
+        self.leftSection.addLayout(self.productSection)
+        
+        self.mainLayout.addLayout(self.leftSection, stretch=2)
+        self.mainLayout.addLayout(self.cartSection, stretch=1)
 
-        self.sortByOtherBtn_2 = QtWidgets.QPushButton(self.layoutWidget_2)
-        self.sortByOtherBtn_2.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn_2.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn_2.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByOtherBtn_2.setObjectName("sortByOtherBtn_2")
-        self.sortByOtherBtn_2.setText("Nokia")
-        self.horizontalLayout_2.addWidget(self.sortByOtherBtn_2)
+        mainWidget = QWidget()
+        mainWidget.setLayout(self.mainLayout)
+        Form.setCentralWidget(mainWidget)
+        Form.setMenuBar(self.menuBar)
+        Form.setStyleSheet("background-color: #2b2b2b; color: white;")
 
+class SalesView(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.ui = UIContainer()
+        self.ui.setupUi(self)
+        self.cart_items = {}
+        self.setup_tables()
+        self.connect_signals()
 
+    def setup_tables(self):
+        # Product table
+        self.product_model = QStandardItemModel()
+        self.product_model.setHorizontalHeaderLabels(['Name', 'SKU', 'Selling Price', 'Quantity'])
+        self.ui.productTable.setModel(self.product_model)
+        
+        # Cart table
+        self.cart_model = QStandardItemModel()
+        self.cart_model.setHorizontalHeaderLabels(['Item', 'Qty', 'Price', 'Delete'])
+        self.ui.cartList.setModel(self.cart_model)
 
-        self.layoutWidget_3 = QtWidgets.QWidget(Form)
-        self.layoutWidget_3.setGeometry(QtCore.QRect(0, 220, 1200, 100))
-        self.layoutWidget_3.setObjectName("layoutWidget_3")
-        self.horizontalLayout_3 = QtWidgets.QHBoxLayout(self.layoutWidget_3)
-        self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
+    def connect_signals(self):
+        # Connect category buttons
+        for i, category in enumerate(self.ui.categories):
+            button = self.ui.categoryLayout.itemAt(i).widget()
+            button.clicked.connect(lambda c, cat=category: self.load_products(cat))
+        
+        # Connect search
+        self.ui.skuSearch.textChanged.connect(self.filter_products)
+        
+        # Connect cart interactions
+        self.ui.productTable.doubleClicked.connect(self.add_to_cart)
+        self.ui.discountValue.valueChanged.connect(self.update_totals)
+        self.ui.payButton.clicked.connect(self.process_payment)
 
-        self.sortByChickenBtn_3 = QtWidgets.QPushButton(self.layoutWidget_3)
-        self.sortByChickenBtn_3.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn_3.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByChickenBtn_3.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByChickenBtn_3.setObjectName("sortByChickenBtn_3")
-        self.sortByChickenBtn_3.setText("Samsung")
-        self.horizontalLayout_3.addWidget(self.sortByChickenBtn_3)
+    def load_products(self, category):
+        query = QSqlQuery()
+        query.prepare("SELECT name, sku, sell_price, qty FROM products WHERE category_id = (SELECT id FROM categories WHERE name = ?)")
+        query.addBindValue(category)
+        query.exec_()
+        
+        self.product_model.setRowCount(0)
+        while query.next():
+            row = []
+            for i in range(4):
+                item = QStandardItem(str(query.value(i)))
+                row.append(item)
+            self.product_model.appendRow(row)
 
-        self.sortByDrinkBtn_3 = QtWidgets.QPushButton(self.layoutWidget_3)
-        self.sortByDrinkBtn_3.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn_3.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByDrinkBtn_3.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByDrinkBtn_3.setObjectName("sortByDrinkBtn_3")
-        self.sortByDrinkBtn_3.setText("Lenavo")
-        self.horizontalLayout_3.addWidget(self.sortByDrinkBtn_3)
+    def add_to_cart(self, index):
+        row = index.row()
+        sku = self.product_model.item(row, 1).text()
+        name = self.product_model.item(row, 0).text()
+        price = float(self.product_model.item(row, 2).text())
+        
+        if sku in self.cart_items:
+            self.cart_items[sku]['qty'] += 1
+        else:
+            self.cart_items[sku] = {
+                'name': name,
+                'qty': 1,
+                'price': price
+            }
+        
+        self.update_cart_display()
 
-        self.sortByOtherBtn_3 = QtWidgets.QPushButton(self.layoutWidget_3)
-        self.sortByOtherBtn_3.setMinimumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn_3.setMaximumSize(QtCore.QSize(400, 100))
-        self.sortByOtherBtn_3.setStyleSheet("font: 75 35pt;  background-color: #2D55DB; color: #fff;")
-        self.sortByOtherBtn_3.setObjectName("sortByOtherBtn_3")
-        self.sortByOtherBtn_3.setText("Dell")
-        self.horizontalLayout_3.addWidget(self.sortByOtherBtn_3)
-
-        self.layoutWidget_4 = QtWidgets.QWidget(Form)
-        self.layoutWidget_4.setGeometry(QtCore.QRect(0, 330, 1200, 20))
-        self.layoutWidget_4.setObjectName("layoutWidget_4")
-        self.top_box_layout = QtWidgets.QHBoxLayout(self.layoutWidget_4)
-        self.top_box_layout.setContentsMargins(0, 0, 0, 0)
-        self.add_button = QtWidgets.QPushButton("Add +")
-        self.search_box = QtWidgets.QLineEdit()
-        self.search_box.setPlaceholderText("SKU");
-        self.search_button = QtWidgets.QPushButton("Search")
-        self.top_box_layout.addWidget(self.add_button)
-        self.top_box_layout.addWidget(self.search_box)
-        self.top_box_layout.addWidget(self.search_button)
-
-
-        self.layoutWidget_5 = QtWidgets.QWidget(Form)
-        self.layoutWidget_5.setGeometry(QtCore.QRect(0, 360, 1200, 500))
-        self.layoutWidget_5.setObjectName("layoutWidget_5")
-        self.horizontalLayout_5 = QtWidgets.QVBoxLayout(self.layoutWidget_5)
-        self.horizontalLayout_5.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_5.setObjectName("horizontalLayout_5")
-
-        self.orderList = QtWidgets.QTableView()
-        self.orderList.setMinimumSize(QtCore.QSize(1200, 500))
-        self.orderList.setMaximumSize(QtCore.QSize(1200, 500))
-        self.orderList.setStyleSheet("font: 75 25pt \"함초롬돋움\";")
-        self.orderList.setObjectName("orderList")
-        self.orderList.verticalHeader().setVisible(False)
-        self.orderList.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.orderList.resizeColumnsToContents()
-        self.header  = self.orderList.horizontalHeader()
-        self.header.setDefaultAlignment(Qt.AlignHCenter)
-        self.horizontalLayout_5.addWidget(self.orderList)
-
-        orderModel = QtGui.QStandardItemModel()
-        orderModel.setHorizontalHeaderLabels(['No', 'Sku', 'Name', 'Price'])
-
-        orderModel.setItem(0, 0, QtGui.QStandardItem('0'))
-        orderModel.setItem(0, 1, QtGui.QStandardItem('9834938'))
-        orderModel.setItem(0, 2, QtGui.QStandardItem('HP'))
-        orderModel.setItem(0, 3, QtGui.QStandardItem('3343'))
-        self.orderList.resizeColumnsToContents()
-        self.orderList.setModel(orderModel)
-
-
-
-
-        self.layoutWidget_6 = QtWidgets.QWidget(Form)
-        self.layoutWidget_6.setGeometry(QtCore.QRect(1200, 0, 600, 700))
-        self.layoutWidget_6.setObjectName("layoutWidget_6")
-        self.horizontalLayout_6 = QtWidgets.QVBoxLayout(self.layoutWidget_6)
-        self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout_6.setObjectName("horizontalLayout_6")
-
-        self.productList = QtWidgets.QTableView()
-        self.productList.setMinimumSize(QtCore.QSize(1200, 700))
-        self.productList.setMaximumSize(QtCore.QSize(1200, 700))
-        self.productList.setStyleSheet("font: 75 25pt \"함초롬돋움\";")
-        self.productList.setObjectName("productList")
-        self.productList.verticalHeader().setVisible(False)
-        self.productList.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.productList.resizeColumnsToContents()
-        self.header  = self.productList.horizontalHeader()
-        self.header.setDefaultAlignment(Qt.AlignHCenter)
-        self.horizontalLayout_6.addWidget(self.productList)
-
-        proudctModel = QtGui.QStandardItemModel()
-        proudctModel.setHorizontalHeaderLabels(['No', 'Sku', 'Name', 'Price'])
-
-        proudctModel.setItem(0, 0, QtGui.QStandardItem('0'))
-        proudctModel.setItem(0, 1, QtGui.QStandardItem('9834938'))
-        proudctModel.setItem(0, 2, QtGui.QStandardItem('HP'))
-        proudctModel.setItem(0, 3, QtGui.QStandardItem('3343'))
-        self.productList.resizeColumnsToContents()
-        self.productList.setModel(proudctModel)
-
-        QtCore.QMetaObject.connectSlotsByName(Form)
+    def filter_products(self, text):
+        model = self.ui.productTable.model()
+        for row in range(model.rowCount()):
+            sku = model.index(row, 1).data()
+            self.ui.productTable.setRowHidden(row, not text.lower() in str(sku).lower())
 
 
+    def update_quantity(self, index):
+        row = index.row()
+        if row >= len(self.cart_items):
+            return
+            
+        key = list(self.cart_items.keys())[row]
+        quantity, ok = QInputDialog.getInt(
+            self, 'Update Quantity', 
+            'Enter quantity:', 
+            self.cart_items[key]['qty'], 
+            0, 100, 1
+        )
+        
+        if ok:
+            if quantity == 0:
+                del self.cart_items[key]
+            else:
+                self.cart_items[key]['qty'] = quantity
+                item_total = self.cart_items[key]['price'] * quantity
+                self.cart_items[key]['total'] = item_total
+            self.update_cart_display()
 
-class SalesView(QMainWindow, Ui_Form):
-    def __init__(self, parent=None):
-        super(SalesView, self).__init__(parent)
-        self.setupUi(self)
-        self.show()
-    #def initUI(self):
+    def update_cart_display(self):
+        self.cart_model.setRowCount(0)
+        total = 0
+        
+        for sku, item in self.cart_items.items():
+            row = []
+            item_subtotal = item['price'] * item['qty']
+            total += item_subtotal
+            
+            row.append(QStandardItem(item['name']))
+            
+            # Create QLineEdit for quantity
+            qtyEdit = QLineEdit()
+            qtyEdit.setText(str(item['qty']))
+            qtyEdit.setStyleSheet("background-color: #3b3b3b; color: white;")
+            # Validate input to only accept numbers
+            qtyEdit.setValidator(QIntValidator(0, 999))
+            # Connect the editing finished signal
+            qtyEdit.editingFinished.connect(lambda sku=sku, edit=qtyEdit: self.update_item_quantity(sku, edit))
+            
+            row.append(QStandardItem(""))  # Empty item for qty column
+            row.append(QStandardItem(f"${item['price']:.2f}"))
+            
+            deleteBtn = QPushButton("×")
+            deleteBtn.clicked.connect(lambda checked, s=sku: self.remove_item(s))
+            deleteBtn.setStyleSheet("background-color: red; color: white;")
+            
+            self.cart_model.appendRow(row)
+            
+            # Set the QLineEdit widget in the quantity column
+            self.ui.cartList.setIndexWidget(
+                self.cart_model.index(self.cart_model.rowCount()-1, 1),
+                qtyEdit
+            )
+            
+            # Set the delete button
+            self.ui.cartList.setIndexWidget(
+                self.cart_model.index(self.cart_model.rowCount()-1, 3),
+                deleteBtn
+            )
 
+        self.ui.subTotalValue.setText(f"{total:.2f}")
+        self.update_totals()
 
+    def update_item_quantity(self, sku, qtyEdit):
+        try:
+            new_qty = int(qtyEdit.text())
+            if new_qty <= 0:
+                self.remove_item(sku)
+            else:
+                self.cart_items[sku]['qty'] = new_qty
+                self.update_cart_display()
+        except ValueError:
+            # Reset to previous value if invalid input
+            qtyEdit.setText(str(self.cart_items[sku]['qty']))
 
+    def calculate_total(self):
+        subtotal = float(self.ui.sub_total.text().replace('$', ''))
+        discount = float(self.ui.discount.text() or 0)
+        final_total = subtotal - discount
+        self.ui.total_payment.setText(f"${final_total:.2f}")
 
+    def update_totals(self):
+        subtotal = float(self.ui.subTotalValue.text())
+        discount = int(self.ui.discountValue.text() or 0)
+        final_total = subtotal - discount
+        self.ui.totalValue.setText(f"{final_total:.2f}")
 
+    def remove_item(self, sku):
+        if sku in self.cart_items:
+            del self.cart_items[sku]
+            self.update_cart_display()
 
+    def process_payment(self):
+        # Add payment processing logic here
+        pass

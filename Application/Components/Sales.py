@@ -3,9 +3,11 @@ import re
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlQueryModel
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QIntValidator
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLabel, QLineEdit, QTableView, QHeaderView, QMenuBar, QGridLayout, QSpinBox, QInputDialog)
-from PyQt5.QtCore import QObject
+    QPushButton, QLabel, QLineEdit, QTableView, QHeaderView, QMenuBar, QGridLayout, QSpinBox, QInputDialog, QMessageBox, QDialog, QTextEdit)
+from PyQt5.QtCore import QObject, QDateTime, Qt, QDate
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
+import json
 
 class UIContainer(QObject):
     def setupUi(self, Form):
@@ -67,20 +69,40 @@ class UIContainer(QObject):
         self.cartList.setMinimumHeight(600)
         
         # Cart Total
-        self.totalSection = QHBoxLayout()
+        self.totalSection = QVBoxLayout()
+        
+        # First row
+        self.totalRow1 = QHBoxLayout()
         self.subTotalLabel = QLabel("Sub Total : ")
         self.subTotalValue = QLabel("50")
-        self.discountLabel = QLabel("% : ")
+        self.discountLabel = QLabel("Discount : ")
         self.discountValue = QSpinBox()
         self.totalLabel = QLabel("Total Payment : ")
         self.totalValue = QLabel("50")
-        self.payButton = QPushButton("Pay")
-        self.payButton.setStyleSheet("background-color: green; color: white; padding: 10px;")
         
         for widget in [self.subTotalLabel, self.subTotalValue, 
                       self.discountLabel, self.discountValue,
-                      self.totalLabel, self.totalValue, self.payButton]:
-            self.totalSection.addWidget(widget)
+                      self.totalLabel, self.totalValue]:
+            self.totalRow1.addWidget(widget)
+            
+        # Second row
+        self.totalRow2 = QHBoxLayout()
+        self.paidLabel = QLabel("Paid : ")
+        self.paidInput = QLineEdit()
+        self.paidInput.textChanged.connect(self.calculate_balance)
+        self.balanceLabel = QLabel("Balance : ")
+        self.balanceInput = QLineEdit()
+        self.balanceInput.setReadOnly(True)
+        self.payButton = QPushButton("Pay")
+        self.payButton.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px;")
+        
+        for widget in [self.paidLabel, self.paidInput,
+                      self.balanceLabel, self.balanceInput,
+                      self.payButton]:
+            self.totalRow2.addWidget(widget)
+            
+        self.totalSection.addLayout(self.totalRow1)
+        self.totalSection.addLayout(self.totalRow2)
 
         self.cartSection.addLayout(self.cartHeader)
         self.cartSection.addWidget(self.cartList)
@@ -100,6 +122,124 @@ class UIContainer(QObject):
         Form.setCentralWidget(mainWidget)
         Form.setMenuBar(self.menuBar)
         Form.setStyleSheet("background-color: #2b2b2b; color: white;")
+
+    def calculate_balance(self):
+        try:
+            total = float(self.totalValue.text())
+            paid = float(self.paidInput.text() or 0)
+            balance = paid - total
+            self.balanceInput.setText(f"{balance:.2f}")
+        except ValueError:
+            self.balanceInput.setText("Invalid input")
+
+class ReceiptWindow(QDialog):
+    def __init__(self, payment_data, parent=None):
+        super().__init__(parent)
+        self.payment_data = payment_data
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.setWindowTitle("Receipt Preview")
+        self.setMinimumWidth(400)
+        self.setMinimumHeight(600)
+        
+        layout = QVBoxLayout()
+        
+        # Create receipt content
+        self.receipt_text = QTextEdit()
+        self.receipt_text.setReadOnly(True)
+        
+        # Generate receipt HTML
+        receipt_html = f"""
+        <div style='font-family: Arial; width: 100%;'>
+            <h2 style='text-align: center;'>SALES RECEIPT</h2>
+            <p style='text-align: center;'>{QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')}</p>
+            <hr>
+            <table width='100%' style='border-collapse: collapse;'>
+                <tr>
+                    <th style='text-align: left;'>Item</th>
+                    <th style='text-align: right;'>Qty</th>
+                    <th style='text-align: right;'>Price</th>
+                    <th style='text-align: right;'>Subtotal</th>
+                </tr>
+        """
+        
+        # Add items
+        for item in self.payment_data['items']:
+            receipt_html += f"""
+                <tr>
+                    <td>{item['name']}</td>
+                    <td style='text-align: right;'>{item['quantity']}</td>
+                    <td style='text-align: right;'>${item['price']:.2f}</td>
+                    <td style='text-align: right;'>${item['subtotal']:.2f}</td>
+                </tr>
+            """
+            
+        # Add totals
+        receipt_html += f"""
+            </table>
+            <hr>
+            <table width='100%'>
+                <tr>
+                    <td style='text-align: right;'>Subtotal:</td>
+                    <td style='text-align: right; width: 100px;'>${self.payment_data['subtotal']:.2f}</td>
+                </tr>
+                <tr>
+                    <td style='text-align: right;'>Discount:</td>
+                    <td style='text-align: right;'>${self.payment_data['discount']:.2f}</td>
+                </tr>
+                <tr>
+                    <td style='text-align: right;'><b>Total:</b></td>
+                    <td style='text-align: right;'><b>${self.payment_data['total']:.2f}</b></td>
+                </tr>
+                <tr>
+                    <td style='text-align: right;'>Paid Amount:</td>
+                    <td style='text-align: right;'>${self.payment_data['paid_amount']:.2f}</td>
+                </tr>
+                <tr>
+                    <td style='text-align: right;'>Balance:</td>
+                    <td style='text-align: right;'>${self.payment_data['balance']:.2f}</td>
+                </tr>
+            </table>
+            <hr>
+            <p style='text-align: center;'>Thank you for your purchase!</p>
+        </div>
+        """
+        
+        self.receipt_text.setHtml(receipt_html)
+        layout.addWidget(self.receipt_text)
+        
+        # Add print buttons
+        button_layout = QHBoxLayout()
+        
+        print_button = QPushButton("Print")
+        print_button.clicked.connect(self.print_receipt)
+        
+        preview_button = QPushButton("Print Preview")
+        preview_button.clicked.connect(self.print_preview)
+        
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+        
+        button_layout.addWidget(print_button)
+        button_layout.addWidget(preview_button)
+        button_layout.addWidget(close_button)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+        
+    def print_receipt(self):
+        printer = QPrinter()
+        dialog = QPrintDialog(printer, self)
+        
+        if dialog.exec_() == QDialog.Accepted:
+            self.receipt_text.print_(printer)
+            
+    def print_preview(self):
+        printer = QPrinter()
+        preview = QPrintPreviewDialog(printer, self)
+        preview.paintRequested.connect(lambda p: self.receipt_text.print_(p))
+        preview.exec_()
 
 class SalesView(QMainWindow):
     def __init__(self):
@@ -285,6 +425,7 @@ class SalesView(QMainWindow):
         final_total = subtotal - discount
         self.ui.total_payment.setText(f"${final_total:.2f}")
 
+
     def update_totals(self):
         subtotal = float(self.ui.subTotalValue.text())
         discount = int(self.ui.discountValue.text() or 0)
@@ -297,5 +438,50 @@ class SalesView(QMainWindow):
             self.update_cart_display()
 
     def process_payment(self):
-        # Add payment processing logic here
-        pass
+        try:
+            # Get all the payment details
+            payment_data = {
+                'items': [
+                    {
+                        'sku': sku,
+                        'name': item['name'],
+                        'quantity': item['qty'],
+                        'price': item['price'],
+                        'subtotal': item['price'] * item['qty']
+                    }
+                    for sku, item in self.cart_items.items()
+                ],
+                'subtotal': float(self.ui.subTotalValue.text()),
+                'discount': float(self.ui.discountValue.text() or 0),
+                'total': float(self.ui.totalValue.text()),
+                'paid_amount': float(self.ui.paidInput.text() or 0),
+                'balance': float(self.ui.balanceInput.text() or 0),
+                'timestamp': QDateTime.currentDateTime().toString(Qt.ISODate)
+            }
+
+            # Convert payment data to JSON string
+            payment_json = json.dumps(payment_data)
+
+            # Save to database
+            query = QSqlQuery()
+            query.prepare("""
+                INSERT INTO payments (payment_data, created_at)
+                VALUES (?, CURRENT_TIMESTAMP)
+            """)
+            query.addBindValue(payment_json)
+
+            if query.exec_():
+                QMessageBox.information(self, "Success", "Payment processed successfully!")
+                # Clear the cart and reset the form
+                self.cart_items = {}
+                self.update_cart_display()
+                self.ui.paidInput.clear()
+                self.ui.balanceInput.clear()
+
+                receipt_window = ReceiptWindow(payment_data, self)
+                receipt_window.exec_()
+            else:
+                QMessageBox.critical(self, "Error", "Failed to process payment: " + query.lastError().text())
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")

@@ -5,7 +5,6 @@ import PyQt5.QtGui as QtGui
 from PyQt5.QtWidgets import *
 import re
 
-
 class FilterModel(QtCore.QSortFilterProxyModel):
     def __init__(self, filters):
         super().__init__()
@@ -605,7 +604,6 @@ class StockView(QWidget):
         self.currentPage = pageIndex
         self.updateStatus()
 
-    # Query records based on paging
     def queryRecord(self, limitIndex):
         sql = "SELECT id as 'ID', name as 'Product Name', sku as 'SKU', qty as 'Quantity', " \
                 "sell_price as 'Selling Price', purchase_price as 'Purchase Price' " \

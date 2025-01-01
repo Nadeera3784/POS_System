@@ -46,63 +46,56 @@ class FilterDialog(QDialog):
 
         self.setWindowTitle('Filter Column')
 
-class MyHeaderModel(QtCore.QAbstractItemModel):
-    def __init__(self, labels, parent = None):
-        super(MyHeaderModel, self).__init__(parent)
-        self.headerDataChanged.connect(lambda: ...)
-        self.data_ = self.fill_labels_spacing(labels, parent)
-        
-    def headerData(self, section, orientation, role):
-        return QtCore.QVariant(self.data_[section])
+class CustomHeaderModel(QtCore.QAbstractItemModel):
+    def __init__(self, labels, parent=None):
+        super(CustomHeaderModel, self).__init__(parent)
+        self.labels = labels
 
-    def columnCount(self,parent):
-        return 7#----------
-    def data(self, index, role = QtCore.Qt.DisplayRole):
-        return index.internalPointer().data(index.column())
-    def index(self, row, column, parent = QtCore.QModelIndex()):
-        return QtCore.QModelIndex()
+    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
+        if role == QtCore.Qt.DisplayRole and section < len(self.labels):
+            return self.labels[section]
+        return None
+
+    def columnCount(self, parent):
+        return len(self.labels)
+
+    def data(self, index, role=QtCore.Qt.DisplayRole):
+        if not index.isValid() or role != QtCore.Qt.DisplayRole:
+            return None
+        if index.column() < len(self.labels):
+            return self.labels[index.column()]
+        return None
+
+    def index(self, row, column, parent=QtCore.QModelIndex()):
+        if not self.hasIndex(row, column, parent):
+            return QtCore.QModelIndex()
+        return self.createIndex(row, column)
+
     def parent(self, index):
         return QtCore.QModelIndex()
 
-    def rowCount(self, parent = QtCore.QModelIndex()):
-        return 0
-
-    def fill_labels_spacing(self, labels, parent):
-        cell_width = 800 // self.columnCount(self) + 1 #616 width is the updated table width after headerview has been spawned
-        
-        normal_cell_width = parent.geometry().width() // self.columnCount(self) + 1
-
-        new_label_list = []
-        for i, label in enumerate(labels):
-            if i == len(labels) - 1:
-                for i in range(round(0.33 * cell_width)):# use 1/3 to get one third of the 
-                    label = " "+label
-                new_label_list.append(label)
-            else:
-                for i in range(round(0.5 * normal_cell_width) ):
-                    label = " "+label
-                new_label_list.append(label)
-        return new_label_list
+    def rowCount(self, parent=QtCore.QModelIndex()):
+        return 0 if parent.isValid() else 1
     
-class MyHeader(QHeaderView):
+class CustomHeader(QHeaderView):
     def __init__(self, header,labels, parent= None):
-        super().__init__(QtCore.Qt.Horizontal, header)
+        super().__init__(QtCore.Qt.Horizontal, parent) 
         self.main_header = header
-        self.setModel(MyHeaderModel( labels, self))
-        self.resizeSection(6, self.getSectionSizes(6,7))
+        self.setModel(CustomHeaderModel(labels))
         self.sectionResized.connect(self.updateSizes)
-        self.horizontalScrollBar().valueChanged.connect(self.updateOffset)
+        self.main_header.sectionResized.connect(self.updateSizes)
         self.setGeometry(0, 0, header.width(), header.height())
-        self.updateOffset()
-        self.main_header.installEventFilter(self)
-        self.main_header.setCascadingSectionResizes(False)
-        self.main_header.setSortIndicatorShown(False)
-        self.main_header.setStretchLastSection(True)
+        
+        # Configure header behavior
+        self.setSectionsClickable(True)
+        self.setSectionsMovable(True)
+        self.setStretchLastSection(True)
+        self.setSectionResizeMode(QHeaderView.Interactive)
         
 
     def updateSizes(self):
-        self.setOffset(self.main_header.offset())
-        self.main_header.resizeSection(7, self.main_header.sectionSize(7) + (self.sectionSize(6) - self.getSectionSizes(6, 7)))
+        for i in range(self.count()):
+            self.resizeSection(i, self.main_header.sectionSize(i))
     
     def updateOffset(self):
         self.setOffset(self.main_header.offset())
@@ -170,9 +163,16 @@ class DelegateEdit(QItemDelegate):
 
         def onButtonEdit(self, id):
             query = QSqlQuery()
-            query.prepare("SELECT id,name,sku,qty,sell_price,purchase_price FROM products WHERE id="+str(id))
+            query.prepare("""
+                SELECT p.id, p.name, p.sku, p.qty, p.sell_price, p.purchase_price, p.category_id, c.name as category_name
+                FROM products p 
+                LEFT JOIN categories c ON p.category_id = c.id 
+                WHERE p.id=?
+            """)
+            query.addBindValue(id)
             query.exec_()
             query.first()
+
             idIndex = query.record().indexOf("id")
             nameIndex = query.record().indexOf("name")
             skuIndex = query.record().indexOf("sku")
@@ -183,7 +183,7 @@ class DelegateEdit(QItemDelegate):
             self.updateUI = QDialog()
             self.updateUI.setWindowTitle("Update Product")
             self.updateUI.setObjectName("Update Product")
-            self.updateUI.resize(250, 200)
+            self.updateUI.resize(250, 230)
             self.updateUI.setWindowFlags(self.updateUI.windowFlags() & QtCore.Qt.CustomizeWindowHint)
             self.updateUI.setWindowFlags(self.updateUI.windowFlags() & ~QtCore.Qt.WindowMinMaxButtonsHint)
 
@@ -231,10 +231,23 @@ class DelegateEdit(QItemDelegate):
             self.inputPurchase.setText(str(query.value(purchaseIndex)))
             self.inputPurchase.move(100, 135)
 
+            self.category = QComboBox(self.updateUI)
+            categories = self.parent().load_categories()
+            selected_category_id = query.value(6)
+
+            for cat_id, cat_name in categories:
+                self.category.addItem(cat_name, cat_id)
+                if cat_id == selected_category_id:
+                    self.category.setCurrentText(cat_name)
+            
+            self.labelCategory = QLabel("Category:", self.updateUI)
+            self.labelCategory.move(20, 170)
+            self.category.move(100, 165)
+
             self.updateButton = QPushButton("Save",self.updateUI)
             self.updateButton.setObjectName(str(query.value(idIndex)))
             self.updateButton.clicked.connect(self.onButtonUpdate)
-            self.updateButton.move(100, 165)
+            self.updateButton.move(100, 200)
             self.updateUI.show()
 
 
@@ -245,6 +258,7 @@ class DelegateEdit(QItemDelegate):
             qty      = self.inputQty.text()
             selling  = self.inputSelling.text()
             purchase = self.inputPurchase.text()
+            category_id = self.category.currentData()
             MessageBox = QMessageBox()
             if name == "":
                self.inputName.setStyleSheet("border: 1px solid red") 
@@ -259,12 +273,13 @@ class DelegateEdit(QItemDelegate):
             else:
                 try:
                     query = QSqlQuery()
-                    query.prepare("UPDATE products SET name=:name, sku=:sku, qty=:qty, sell_price=:sell_price, purchase_price=:purchase_price  WHERE id=:id");
+                    query.prepare("UPDATE products SET name=:name, sku=:sku, qty=:qty, sell_price=:sell_price, purchase_price=:purchase_price, category_id=:category_id  WHERE id=:id");
                     query.bindValue(":name", name)
                     query.bindValue(":sku", sku)
                     query.bindValue(":qty", qty)
                     query.bindValue(":sell_price", selling)
                     query.bindValue(":purchase_price", purchase)
+                    query.bindValue(":category_id", category_id)
                     query.bindValue(":id", self.id)
                     query.exec_()
                     MessageBox.setIcon(QMessageBox.Information)
@@ -273,6 +288,7 @@ class DelegateEdit(QItemDelegate):
                     MessageBox.setStandardButtons(QMessageBox.Ok)
                     MessageBox.exec()
                     self.parent().initializedModel()
+                    self.updateUI.close()
                 except Exception as e:
                     print("Oops!", e.__class__, "occurred.")
                     MessageBox.setIcon(QMessageBox.Warning)
@@ -429,7 +445,7 @@ class CheckboxSqlModel(QSqlQueryModel):
 class StockView(QWidget):
     def __init__(self, parent=None):
         super(StockView, self).__init__(parent)
-        self.db = None
+        self.db = self.initialize_database()
         self.layout = QVBoxLayout()
 
         self.top_box_layout = QHBoxLayout()
@@ -502,31 +518,60 @@ class StockView(QWidget):
         self.nextButton.clicked.connect(self.onNextPage)
         self.switchPageButton.clicked.connect(self.onSwitchPage)
 
+    def initialize_database(self):
+            db_name = "qt_sql_default_connection"
+            if QSqlDatabase.contains(db_name):
+                db = QSqlDatabase.database(db_name)
+                db.close()
+                QSqlDatabase.removeDatabase(db_name)
+            
+            db = QSqlDatabase.addDatabase("QSQLITE")
+            db.setDatabaseName("Data/database.db")
+            if not db.open():
+                print("Failed to open database")
+                return None
+            return db
+
     def initializedModel(self):
-        self.db = QSqlDatabase.addDatabase("QSQLITE")
-        self.db.setDatabaseName("Data/database.db")
-        if not self.db.open():
-            return False
-        sql = "SELECT * FROM products"
+        if not self.db or not self.db.isOpen():
+            self.db = self.initialize_database()
+            
+        sql = "SELECT id as 'ID', name as 'Product Name', sku as 'SKU', qty as 'Quantity', " \
+            "sell_price as 'Selling Price', purchase_price as 'Purchase Price' FROM products"
         self.queryModel.setQuery(sql, self.db)
+        
         self.proxy = QtCore.QSortFilterProxyModel()
         self.proxy.setSourceModel(self.queryModel)
-        self.proxy.setFilterKeyColumn(1)
+        self.proxy.setFilterKeyColumn(2)  # Set filter to SKU column
         self.totalRecordCount = self.queryModel.rowCount()
+        
         if self.totalRecordCount % self.pageRecordCount == 0:
             self.totalPage = self.totalRecordCount / self.pageRecordCount
         else:
             self.totalPage = int(self.totalRecordCount / self.pageRecordCount) + 1
-        sql = "SELECT * FROM products limit %d,%d" % (0, self.pageRecordCount)
+        
+        sql = "SELECT id as 'ID', name as 'Product Name', sku as 'SKU', qty as 'Quantity', " \
+            "sell_price as 'Selling Price', purchase_price as 'Purchase Price' " \
+            "FROM products limit %d,%d" % (0, self.pageRecordCount)
         self.queryModel.setQuery(sql, self.db)
+        
         self.tableView.setModel(self.proxy)
-        data_labels = ["ID", "Name", "SKU", "QTY", "SELL", "PURCHASE", "EDIT", "ACTION", "ACTION2"]
-        MyHeader(self.tableView.horizontalHeader(), data_labels);
+        data_labels = ["ID", "Product Name", "SKU", "Quantity", "Selling Price", "Purchase Price", "Edit", "Delete"]
+        CustomHeader(self.tableView.horizontalHeader(), data_labels)
+        
         self.tableView.model().layoutChanged.emit()
         self.tableView.model().insertColumn(6, QtCore.QModelIndex())
         self.tableView.model().insertColumn(7, QtCore.QModelIndex())
         self.tableView.setItemDelegateForColumn(6, DelegateEdit(self))
         self.tableView.setItemDelegateForColumn(7, DelegateDelete(self))
+
+    def load_categories(self):
+            query = QSqlQuery()
+            query.exec_("SELECT id, name FROM categories ORDER BY name")
+            categories = []
+            while query.next():
+                categories.append((query.value(0), query.value(1)))
+            return categories
 
     def onPrevPage(self):
         self.currentPage -= 1
@@ -562,8 +607,16 @@ class StockView(QWidget):
 
     # Query records based on paging
     def queryRecord(self, limitIndex):
-        sql = "SELECT * FROM products limit %d,%d" % (limitIndex, self.pageRecordCount)
+        sql = "SELECT id as 'ID', name as 'Product Name', sku as 'SKU', qty as 'Quantity', " \
+                "sell_price as 'Selling Price', purchase_price as 'Purchase Price' " \
+                "FROM products limit %d,%d" % (limitIndex, self.pageRecordCount)
         self.queryModel.setQuery(sql)
+        
+        self.tableView.model().layoutChanged.emit()
+        self.tableView.model().insertColumn(6, QtCore.QModelIndex())
+        self.tableView.model().insertColumn(7, QtCore.QModelIndex())
+        self.tableView.setItemDelegateForColumn(6, DelegateEdit(self))
+        self.tableView.setItemDelegateForColumn(7, DelegateDelete(self))
 
     # Update Spatial Status
     def updateStatus(self):
@@ -580,7 +633,10 @@ class StockView(QWidget):
             self.nextButton.setEnabled(True)
 
     def closeEvent(self):
-        self.db.close()
+        if self.db:
+            self.db.close()
+            QSqlDatabase.removeDatabase(self.db.connectionName())
+        super().closeEvent(event)
 
     def add_filter_functionality(self):
         def show_filter(logical_index):
@@ -599,12 +655,11 @@ class StockView(QWidget):
         header.sectionDoubleClicked.connect(show_filter)
 
     def onSearchChanged(self, text):
-        regex = "^{}".format(text)
-        self.proxy.setFilterRegExp(QtCore.QRegExp(regex, QtCore.Qt.CaseInsensitive))
+        self.proxy.setFilterFixedString(text)
 
     def onAddDialog(self):
         self.dialog = QDialog(self)
-        self.dialog.setWindowTitle("Add Stock")
+        self.dialog.setWindowTitle("Add Product")
         self.formGroupBox = QGroupBox("New Product") 
         self.onlyInt = QtGui.QIntValidator()
         self.sku = QLineEdit() 
@@ -616,12 +671,17 @@ class StockView(QWidget):
         self.purchase = QLineEdit() 
         self.purchase.setValidator(self.onlyInt)
         self.name = QLineEdit() 
+        self.category = QComboBox()
+        categories = self.load_categories()
+        for cat_id, cat_name in categories:
+            self.category.addItem(cat_name, cat_id)
         self.formlayout = QFormLayout() 
         self.formlayout.addRow(QLabel("Name"), self.name) 
         self.formlayout.addRow(QLabel("Sku"), self.sku) 
         self.formlayout.addRow(QLabel("Quantity"), self.qty) 
         self.formlayout.addRow(QLabel("Selling(LKR)"), self.sell) 
         self.formlayout.addRow(QLabel("Purchase(LKR)"), self.purchase) 
+        self.formlayout.addRow(QLabel("Category"), self.category)
         self.formGroupBox.setLayout(self.formlayout) 
         self.buttonBox = QDialogButtonBox()
         self.buttonBox.addButton("Add", QDialogButtonBox.AcceptRole)
@@ -640,7 +700,8 @@ class StockView(QWidget):
         qty       = self.qty.text().strip()
         sell      = self.sell.text().strip()
         purchase  = self.purchase.text().strip()
-
+        category_id = self.category.currentData()
+        print(category_id)
         if name == "":
            self.name.setStyleSheet("border: 1px solid red") 
         elif  sku == "":
@@ -654,13 +715,14 @@ class StockView(QWidget):
         else:
             try:
                 query = QSqlQuery()
-                query.prepare("INSERT INTO products (id,name,sku,qty,sell_price,purchase_price) "
-                              "VALUES (NULL, :name, :sku, :qty, :sell_price, :purchase_price)")
+                query.prepare("INSERT INTO products (id,name,sku,qty,sell_price,purchase_price, category_id) "
+                              "VALUES (NULL, :name, :sku, :qty, :sell_price, :purchase_price, :category_id)")
                 query.bindValue(":name", name)
                 query.bindValue(":sku", sku)
                 query.bindValue(":qty", qty)
                 query.bindValue(":sell_price", sell)
                 query.bindValue(":purchase_price", purchase)
+                query.bindValue(":category_id", category_id)
                 query.exec_()
                 self.name.clear()
                 self.sku.clear()
@@ -669,28 +731,35 @@ class StockView(QWidget):
                 self.purchase.clear()
                 QMessageBox.question(self, "Success","Product has been added successfully!",QMessageBox.Ok)
                 self.initializedModel()
+                self.dialog.close()
             except Exception as e:
                 print("Oops!", e.__class__, "occurred.")
                 QMessageBox.information(self, "Error", "Something went wrong, please try again later")
 
     def onRightClick(self, pos=None):
-        parent = self.sender()
-        globalPos = parent.mapToGlobal(pos)
-        globalPos.setX( globalPos.x() + 20)
-        globalPos.setY( globalPos.y() + 30)
-        mPos = globalPos+pos
-        menu = QMenu()
-        menu.addAction("Edit")
-        menu.addAction("Delete")
-        selectedItem = menu.exec_(globalPos)
-        if selectedItem:
-            if selectedItem.text() == "Edit":
-                print ("clicked on Edit")
-            #self.DoEdit(widge
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     window = DataGrid()
-#     window.show()
-#     sys.exit(app.exec_())
-
+            index = self.tableView.indexAt(pos)
+            if not index.isValid():
+                return
+                
+            data = []
+            model = self.tableView.model()
+            for column in range(model.columnCount()):
+                index_ = model.index(index.row(), column)
+                data.append(str(model.data(index_)))
+            
+            parent = self.sender()
+            globalPos = parent.mapToGlobal(pos)
+            menu = QMenu()
+            editAction = menu.addAction("Edit")
+            deleteAction = menu.addAction("Delete")
+            
+            action = menu.exec_(globalPos)
+            if action == editAction:
+                delegate = self.tableView.itemDelegateForColumn(6)
+                if isinstance(delegate, DelegateEdit):
+                    delegate.onButtonEdit(data[0])
+            elif action == deleteAction:
+                delegate = self.tableView.itemDelegateForColumn(7)
+                if isinstance(delegate, DelegateDelete):
+                    delegate.onButtonDelete(data[0])
 

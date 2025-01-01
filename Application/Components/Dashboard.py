@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox,
 QLabel, QLineEdit, QMenu, QMenuBar, QPushButton, QSpinBox, QTextEdit, QMessageBox, QWidget, QMainWindow, QAction, QTabWidget,
 QVBoxLayout, QFrame, QSplitter,QStyleFactory, QTableView, QHeaderView, QStackedLayout)
 import PyQt5.QtCore as QtCore
-from PyQt5.QtChart import QChart, QChartView, QLineSeries
+#from PyQt5.QtChart import QChart, QChartView, QLineSeries
 from PyQt5.QtGui import QPainter
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery, QSqlTableModel, QSqlQueryModel
 import sys, random
@@ -92,25 +92,26 @@ class DashboardView(QMainWindow):
         return self.widgetContainer;
 
     def generateChart(self):
-        self.series = QLineSeries(self)
-        self.series.append(0,6)
-        self.series.append(2, 4)
-        self.series.append(3, 8)
-        self.series.append(7, 4)
-        self.series.append(10, 5)
-        self.series << QtCore.QPointF(11, 1) << QtCore.QPointF(13, 3) << QtCore.QPointF(17, 6) << QtCore.QPointF(18, 3) << QtCore.QPointF(20, 2)
-        self.chart =  QChart()
-        self.chart.addSeries(self.series)
-        self.chart.createDefaultAxes()
-        self.chart.ChartTheme(QChart.ChartThemeBlueIcy)
-        self.chart.setAnimationOptions(QChart.SeriesAnimations)
-        self.chart.setTitle("Weekly Sales")
-        self.chart.legend().setVisible(True)
-        self.chart.legend().setAlignment(QtCore.Qt.AlignBottom)
-        self.chartview = QChartView(self.chart)
-        self.chartview.setRenderHint(QPainter.Antialiasing)
-        #self.setCentralWidget(self.chartview)
-        return self.chartview; 
+        return
+        # self.series = QLineSeries(self)
+        # self.series.append(0,6)
+        # self.series.append(2, 4)
+        # self.series.append(3, 8)
+        # self.series.append(7, 4)
+        # self.series.append(10, 5)
+        # self.series << QtCore.QPointF(11, 1) << QtCore.QPointF(13, 3) << QtCore.QPointF(17, 6) << QtCore.QPointF(18, 3) << QtCore.QPointF(20, 2)
+        # self.chart =  QChart()
+        # self.chart.addSeries(self.series)
+        # self.chart.createDefaultAxes()
+        # self.chart.ChartTheme(QChart.ChartThemeBlueIcy)
+        # self.chart.setAnimationOptions(QChart.SeriesAnimations)
+        # self.chart.setTitle("Weekly Sales")
+        # self.chart.legend().setVisible(True)
+        # self.chart.legend().setAlignment(QtCore.Qt.AlignBottom)
+        # self.chartview = QChartView(self.chart)
+        # self.chartview.setRenderHint(QPainter.Antialiasing)
+        # #self.setCentralWidget(self.chartview)
+        # return self.chartview; 
 
     def createDB(self):
         self.db = QSqlDatabase.addDatabase("QSQLITE")

@@ -113,7 +113,7 @@ class SalesView(QMainWindow):
     def setup_tables(self):
         # Product table
         self.product_model = QStandardItemModel()
-        self.product_model.setHorizontalHeaderLabels(['Name', 'SKU', 'Selling Price', 'Quantity'])
+        self.product_model.setHorizontalHeaderLabels(['Name', 'SKU', 'Selling Price', 'Quantity', 'Add'])
         self.ui.productTable.setModel(self.product_model)
         
         # Cart table
@@ -131,7 +131,7 @@ class SalesView(QMainWindow):
         self.ui.skuSearch.textChanged.connect(self.filter_products)
         
         # Connect cart interactions
-        self.ui.productTable.doubleClicked.connect(self.add_to_cart)
+        #self.ui.productTable.doubleClicked.connect(self.add_to_cart)
         self.ui.discountValue.valueChanged.connect(self.update_totals)
         self.ui.payButton.clicked.connect(self.process_payment)
 
@@ -147,7 +147,35 @@ class SalesView(QMainWindow):
             for i in range(4):
                 item = QStandardItem(str(query.value(i)))
                 row.append(item)
+            
+            # Add empty item for the Add button column
+            row.append(QStandardItem(""))
             self.product_model.appendRow(row)
+            
+            # Create and add the Add button
+            addBtn = QPushButton("+")
+            addBtn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+            addBtn.clicked.connect(lambda checked, r=self.product_model.rowCount()-1: self.add_to_cart_from_button(r))
+            self.ui.productTable.setIndexWidget(
+                self.product_model.index(self.product_model.rowCount()-1, 4),
+                addBtn
+            )
+
+    def add_to_cart_from_button(self, row):
+        sku = self.product_model.item(row, 1).text()
+        name = self.product_model.item(row, 0).text()
+        price = float(self.product_model.item(row, 2).text())
+        
+        if sku in self.cart_items:
+            self.cart_items[sku]['qty'] += 1
+        else:
+            self.cart_items[sku] = {
+                'name': name,
+                'qty': 1,
+                'price': price
+            }
+        
+        self.update_cart_display()
 
     def add_to_cart(self, index):
         row = index.row()

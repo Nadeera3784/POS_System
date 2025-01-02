@@ -8,6 +8,7 @@ from PyQt5.QtCore import QObject, QDateTime, Qt, QDate
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog, QPrintPreviewDialog
 import json
+from Application.Components.Sales.Receipt import ReceiptView
 
 class UIContainer(QObject):
     def setupUi(self, Form):
@@ -15,26 +16,10 @@ class UIContainer(QObject):
         Form.setWindowTitle("POS System v.1.1")
         Form.resize(1800, 900)
 
-        # Menu Bar
-        self.menuBar = QMenuBar(Form)
-        for menu in ['Dashboard', 'Stock', 'Sales', 'Reports']:
-            self.menuBar.addAction(menu)
-
-        # Category Buttons Layout
         self.categoryLayout = QGridLayout()
-        self.categories = [
-            'Bakery', 'Beverages', 'Books',
-            'Electronics', 'Health_Beauty', 'Household',
-            'Stationery', 'Toys', 'Dell'
-        ]
-        
-        for i, category in enumerate(self.categories):
-            btn = QPushButton(category.replace('_', ' '))
-            btn.setMinimumSize(350, 100)
-            btn.setStyleSheet("font: 75 25pt; background-color: blue; color: white;")
-            self.categoryLayout.addWidget(btn, i//3, i%3)
+        self.categoryButtons = {}
+        self.load_categories()
 
-        # Product List Section
         self.productSection = QVBoxLayout()
         
         # Search Bar
@@ -120,8 +105,6 @@ class UIContainer(QObject):
         mainWidget = QWidget()
         mainWidget.setLayout(self.mainLayout)
         Form.setCentralWidget(mainWidget)
-        Form.setMenuBar(self.menuBar)
-        Form.setStyleSheet("background-color: #2b2b2b; color: white;")
 
     def calculate_balance(self):
         try:
@@ -132,114 +115,40 @@ class UIContainer(QObject):
         except ValueError:
             self.balanceInput.setText("Invalid input")
 
-class ReceiptWindow(QDialog):
-    def __init__(self, payment_data, parent=None):
-        super().__init__(parent)
-        self.payment_data = payment_data
-        self.setup_ui()
+    def load_categories(self):
+        # First clear any existing buttons in the layout and dictionary
+        while self.categoryLayout.count():
+            item = self.categoryLayout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self.categoryButtons.clear()
+
+        # Load categories from database
+        query = QSqlQuery()
+        query.exec_("SELECT id, name FROM categories ORDER BY name")
         
-    def setup_ui(self):
-        self.setWindowTitle("Receipt Preview")
-        self.setMinimumWidth(400)
-        self.setMinimumHeight(600)
-        
-        layout = QVBoxLayout()
-        
-        # Create receipt content
-        self.receipt_text = QTextEdit()
-        self.receipt_text.setReadOnly(True)
-        
-        # Generate receipt HTML
-        receipt_html = f"""
-        <div style='font-family: Arial; width: 100%;'>
-            <h2 style='text-align: center;'>SALES RECEIPT</h2>
-            <p style='text-align: center;'>{QDateTime.currentDateTime().toString('yyyy-MM-dd hh:mm:ss')}</p>
-            <hr>
-            <table width='100%' style='border-collapse: collapse;'>
-                <tr>
-                    <th style='text-align: left;'>Item</th>
-                    <th style='text-align: right;'>Qty</th>
-                    <th style='text-align: right;'>Price</th>
-                    <th style='text-align: right;'>Subtotal</th>
-                </tr>
-        """
-        
-        # Add items
-        for item in self.payment_data['items']:
-            receipt_html += f"""
-                <tr>
-                    <td>{item['name']}</td>
-                    <td style='text-align: right;'>{item['quantity']}</td>
-                    <td style='text-align: right;'>${item['price']:.2f}</td>
-                    <td style='text-align: right;'>${item['subtotal']:.2f}</td>
-                </tr>
-            """
+        row = 0
+        col = 0
+        while query.next():
+            category_id = query.value(0)
+            category_name = query.value(1)
             
-        # Add totals
-        receipt_html += f"""
-            </table>
-            <hr>
-            <table width='100%'>
-                <tr>
-                    <td style='text-align: right;'>Subtotal:</td>
-                    <td style='text-align: right; width: 100px;'>${self.payment_data['subtotal']:.2f}</td>
-                </tr>
-                <tr>
-                    <td style='text-align: right;'>Discount:</td>
-                    <td style='text-align: right;'>${self.payment_data['discount']:.2f}</td>
-                </tr>
-                <tr>
-                    <td style='text-align: right;'><b>Total:</b></td>
-                    <td style='text-align: right;'><b>${self.payment_data['total']:.2f}</b></td>
-                </tr>
-                <tr>
-                    <td style='text-align: right;'>Paid Amount:</td>
-                    <td style='text-align: right;'>${self.payment_data['paid_amount']:.2f}</td>
-                </tr>
-                <tr>
-                    <td style='text-align: right;'>Balance:</td>
-                    <td style='text-align: right;'>${self.payment_data['balance']:.2f}</td>
-                </tr>
-            </table>
-            <hr>
-            <p style='text-align: center;'>Thank you for your purchase!</p>
-        </div>
-        """
-        
-        self.receipt_text.setHtml(receipt_html)
-        layout.addWidget(self.receipt_text)
-        
-        # Add print buttons
-        button_layout = QHBoxLayout()
-        
-        print_button = QPushButton("Print")
-        print_button.clicked.connect(self.print_receipt)
-        
-        preview_button = QPushButton("Print Preview")
-        preview_button.clicked.connect(self.print_preview)
-        
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(self.close)
-        
-        button_layout.addWidget(print_button)
-        button_layout.addWidget(preview_button)
-        button_layout.addWidget(close_button)
-        
-        layout.addLayout(button_layout)
-        self.setLayout(layout)
-        
-    def print_receipt(self):
-        printer = QPrinter()
-        dialog = QPrintDialog(printer, self)
-        
-        if dialog.exec_() == QDialog.Accepted:
-            self.receipt_text.print_(printer)
+            btn = QPushButton(category_name.replace('_', ' '))
+            btn.setMinimumSize(350, 100)
+            btn.setStyleSheet("font: 75 25pt; background-color: blue; color: white;")
             
-    def print_preview(self):
-        printer = QPrinter()
-        preview = QPrintPreviewDialog(printer, self)
-        preview.paintRequested.connect(lambda p: self.receipt_text.print_(p))
-        preview.exec_()
+            # Store the category ID as a property of the button
+            btn.category_id = category_id
+            btn.category_name = category_name
+            
+            self.categoryLayout.addWidget(btn, row, col)
+            self.categoryButtons[category_id] = btn
+            
+            col += 1
+            if col >= 3:
+                col = 0
+                row += 1
 
 class SalesView(QMainWindow):
     def __init__(self):
@@ -263,10 +172,8 @@ class SalesView(QMainWindow):
 
     def connect_signals(self):
         # Connect category buttons
-        for i, category in enumerate(self.ui.categories):
-            button = self.ui.categoryLayout.itemAt(i).widget()
-            button.clicked.connect(lambda c, cat=category: self.load_products(cat))
-        
+        for btn in self.ui.categoryButtons.values():
+            btn.clicked.connect(lambda checked, b=btn: self.load_products(b.category_name))
         # Connect search
         self.ui.skuSearch.textChanged.connect(self.filter_products)
         
@@ -459,6 +366,10 @@ class SalesView(QMainWindow):
                 'timestamp': QDateTime.currentDateTime().toString(Qt.ISODate)
             }
 
+
+            if not self.update_inventory_after_sale():
+                return
+
             # Convert payment data to JSON string
             payment_json = json.dumps(payment_data)
 
@@ -478,10 +389,59 @@ class SalesView(QMainWindow):
                 self.ui.paidInput.clear()
                 self.ui.balanceInput.clear()
 
-                receipt_window = ReceiptWindow(payment_data, self)
+                receipt_window = ReceiptView(payment_data, self)
                 receipt_window.exec_()
             else:
                 QMessageBox.critical(self, "Error", "Failed to process payment: " + query.lastError().text())
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
+
+
+    def update_inventory_after_sale(self):
+        try:
+            # Start a transaction
+            query = QSqlQuery()
+            if not query.exec_("BEGIN TRANSACTION"):
+                raise Exception("Failed to start transaction")
+
+            # Update quantities for each item in the cart
+            for sku, item in self.cart_items.items():
+                update_query = QSqlQuery()
+                update_query.prepare("""
+                    UPDATE products 
+                    SET qty = qty - ? 
+                    WHERE sku = ? AND qty >= ?
+                """)
+                update_query.addBindValue(item['qty'])
+                update_query.addBindValue(sku)
+                update_query.addBindValue(item['qty'])
+
+                if not update_query.exec_():
+                    raise Exception(f"Failed to update quantity for SKU {sku}: {update_query.lastError().text()}")
+
+                # Check if any rows were affected
+                if update_query.numRowsAffected() == 0:
+                    # Check if it failed because of insufficient quantity
+                    check_query = QSqlQuery()
+                    check_query.prepare("SELECT qty FROM products WHERE sku = ?")
+                    check_query.addBindValue(sku)
+                    check_query.exec_()
+                    
+                    if check_query.next():
+                        current_qty = check_query.value(0)
+                        raise Exception(f"Insufficient quantity for {item['name']} (SKU: {sku}). Available: {current_qty}")
+                    else:
+                        raise Exception(f"Product not found: {sku}")
+
+            # If we get here, all updates were successful
+            if not query.exec_("COMMIT"):
+                raise Exception("Failed to commit transaction")
+            
+            return True
+
+        except Exception as e:
+            # Roll back the transaction if any error occurred
+            query.exec_("ROLLBACK")
+            QMessageBox.critical(self, "Inventory Update Error", str(e))
+            return False            

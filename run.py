@@ -32,8 +32,8 @@ class Boot(QDialog):
         self.formGroupBox.setLayout(self.layout)
 
     def onClickLogin(self):
-        ##if self.username.text() == "john" and self.password.text() == "1234":
-        if self.username.text() == "":
+        if self.username.text() == "john" and self.password.text() == "1234":
+        #if self.username.text() == "":
            self.accept()
         else:
          self.msg = QMessageBox()
@@ -51,4 +51,3 @@ if __name__ == '__main__':
         main_window = DashboardView()
         main_window.show()
         sys.exit(app.exec_())
-    #sys.exit(dialog.exec_())

@@ -5,16 +5,8 @@ import PyQt5.QtGui as QtGui
 from PyQt5.QtWidgets import *
 import re
 
-class FilterModel(QtCore.QSortFilterProxyModel):
-    def __init__(self, filters):
-        super().__init__()
-        self.filters = filters
-
-    def filterAcceptsRow(self, row, modelindex):
-        for i, filter in enumerate(self.filters):
-            if filter not in str(self.sourceModel().index(row, i).data()):
-                return False
-        return True
+from Application.Components.Stock.CustomHeader import CustomHeader
+from Application.Components.Stock.FilterModel import FilterModel
 
 class FilterDialog(QDialog):
     def __init__(self, parent):
@@ -44,82 +36,11 @@ class FilterDialog(QDialog):
         self.setLayout(vbox)
 
         self.setWindowTitle('Filter Column')
-
-class CustomHeaderModel(QtCore.QAbstractItemModel):
-    def __init__(self, labels, parent=None):
-        super(CustomHeaderModel, self).__init__(parent)
-        self.labels = labels
-
-    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
-        if role == QtCore.Qt.DisplayRole and section < len(self.labels):
-            return self.labels[section]
-        return None
-
-    def columnCount(self, parent):
-        return len(self.labels)
-
-    def data(self, index, role=QtCore.Qt.DisplayRole):
-        if not index.isValid() or role != QtCore.Qt.DisplayRole:
-            return None
-        if index.column() < len(self.labels):
-            return self.labels[index.column()]
-        return None
-
-    def index(self, row, column, parent=QtCore.QModelIndex()):
-        if not self.hasIndex(row, column, parent):
-            return QtCore.QModelIndex()
-        return self.createIndex(row, column)
-
-    def parent(self, index):
-        return QtCore.QModelIndex()
-
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        return 0 if parent.isValid() else 1
     
-class CustomHeader(QHeaderView):
-    def __init__(self, header,labels, parent= None):
-        super().__init__(QtCore.Qt.Horizontal, parent) 
-        self.main_header = header
-        self.setModel(CustomHeaderModel(labels))
-        self.sectionResized.connect(self.updateSizes)
-        self.main_header.sectionResized.connect(self.updateSizes)
-        self.setGeometry(0, 0, header.width(), header.height())
-        
-        # Configure header behavior
-        self.setSectionsClickable(True)
-        self.setSectionsMovable(True)
-        self.setStretchLastSection(True)
-        self.setSectionResizeMode(QHeaderView.Interactive)
-        
-
-    def updateSizes(self):
-        for i in range(self.count()):
-            self.resizeSection(i, self.main_header.sectionSize(i))
-    
-    def updateOffset(self):
-        self.setOffset(self.main_header.offset())
-        
-    
-    def eventFilter(self, object, event):
-        if object == self.main_header:
-            if event.type() == QtCore.QEvent.Resize:
-                self.setOffset(self.main_header.offset())
-                self.setGeometry(0, 0, self.main_header.width(), self.main_header.height())
-            return False
-        return super().eventFilter(object, event)
-
-    def getSectionSizes(self, first,  second):
-        size = 0
-        for a in range(first, second + 1):
-            size += self.main_header.sectionSize(a)
-        return size
-
 class DelegateEdit(QItemDelegate):
         def __init__(self, owner):
             super().__init__(owner)
             self.owner = owner
-        #def createEditor(self, parent, option, index):
-        #    return DelegateEdit(parent)    
         def createEditor(self, parent, option, index):
             self.lineEdit = QLineEdit(parent)
             self.lineEdit.textChanged.connect(self.emitCommitData) 
@@ -136,11 +57,7 @@ class DelegateEdit(QItemDelegate):
             style = QApplication.style()
             button = QStyleOptionButton()
             button.text = "Edit"
-            button.palette.setColor(QtGui.QPalette.Background, QtGui.QColor(QtCore.Qt.blue));
-            button.palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(QtCore.Qt.blue));
-
-            #button.palette.setBrush(QtGui.QPalette.Background, QtGui.QBrush(QtGui.QColor(QtCore.Qt.blue)));
-
+            button.palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(QtCore.Qt.black));
 
             x = option.rect.left() + 10
             y = option.rect.top() + 5
@@ -212,7 +129,7 @@ class DelegateEdit(QItemDelegate):
             self.inputQty.setText(str(query.value(qtyIndex)))
             self.inputQty.move(100, 75)
 
-            self.labelSelling = QLabel("Selling(LKR):", self.updateUI)
+            self.labelSelling = QLabel("Selling:", self.updateUI)
             self.labelSelling.move(20, 110)
             self.inputSelling = QLineEdit(self.updateUI)
             self.sellingreg_ex = QtCore.QRegExp("^[0-9]*$")
@@ -221,7 +138,7 @@ class DelegateEdit(QItemDelegate):
             self.inputSelling.setText(str(query.value(sellIndex)))
             self.inputSelling.move(100, 105)
 
-            self.labelPurchase = QLabel("Purchase(LKR):", self.updateUI)
+            self.labelPurchase = QLabel("Purchase:", self.updateUI)
             self.labelPurchase.move(20, 140)
             self.inputPurchase = QLineEdit(self.updateUI)
             self.purchasereg_ex = QtCore.QRegExp("^[0-9]*$")
@@ -330,6 +247,7 @@ class DelegateDelete(QItemDelegate):
             button = QStyleOptionButton()
             button.text = "Delete"
             button.palette.setColor(QtGui.QPalette.ButtonText, QtGui.QColor(QtCore.Qt.red));
+            
 
             x = option.rect.left() + 10
             y = option.rect.top() + 5
@@ -397,49 +315,6 @@ class DelegateDelete(QItemDelegate):
                     if(click_y > y and click_y < (y + h)): 
                         self.onButtonDelete(data[index.row()][0])
             return True
-
-class CheckboxSqlModel(QSqlQueryModel):
-    def __init__(self, column):
-        super(CheckboxSqlModel, self).__init__()
-        self.column = column
-        self.checkboxes = list() #List of checkbox states
-        self.first = list() #Used to initialize checkboxes
-
-    def flags(self, index):
-        flags = QSqlQueryModel.flags(self, index)
-        if index.column() == self.column:
-            flags |= QtCore.Qt.ItemIsUserCheckable
-        return flags
-
-    def data(self, index, role=QtCore.Qt.DisplayRole):
-        row = index.row()
-        if index.column() == self.column and role == QtCore.Qt.CheckStateRole:
-            #Used to initialize
-            if row not in self.first :
-                index = self.createIndex(row, self.column)
-                self.first.append(row)
-                self.checkboxes.append(False)
-                return QtCore.Qt.Unchecked
-            #if checked
-            elif self.checkboxes[row]:
-                return QtCore.Qt.Checked
-            else:
-                return QtCore.Qt.Unchecked
-        else:
-            return QSqlQueryModel.data(self, index, role)
-
-    def setData(self, index, value, role=QtCore.Qt.DisplayRole):
-        row = index.row()
-        if index.column() == self.column and role == QtCore.Qt.CheckStateRole:
-            if value:
-                print(value);
-                self.checkboxes[row] = True
-            else:
-                self.checkboxes[row] = False
-            self.dataChanged.emit(index, index)
-            return True
-        else:
-            return False
 
 class StockView(QWidget):
     def __init__(self, parent=None):
@@ -677,8 +552,8 @@ class StockView(QWidget):
         self.formlayout.addRow(QLabel("Name"), self.name) 
         self.formlayout.addRow(QLabel("Sku"), self.sku) 
         self.formlayout.addRow(QLabel("Quantity"), self.qty) 
-        self.formlayout.addRow(QLabel("Selling(LKR)"), self.sell) 
-        self.formlayout.addRow(QLabel("Purchase(LKR)"), self.purchase) 
+        self.formlayout.addRow(QLabel("Selling"), self.sell) 
+        self.formlayout.addRow(QLabel("Purchase"), self.purchase) 
         self.formlayout.addRow(QLabel("Category"), self.category)
         self.formGroupBox.setLayout(self.formlayout) 
         self.buttonBox = QDialogButtonBox()

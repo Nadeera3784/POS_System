@@ -1,4 +1,4 @@
-# Point of Sale (POS) System - Enterprise Retail Management Solution
+# Point of Sale (POS) System 
 
 A comprehensive retail management system developed using Python and PyQt5, designed to streamline point-of-sale operations, inventory management, and business analytics. The solution provides enterprise-grade functionality while maintaining a user-friendly interface suitable for diverse retail environments.
 
@@ -18,7 +18,6 @@ A comprehensive retail management system developed using Python and PyQt5, desig
 - Centralized product database with full CRUD functionality
 - Multi-parameter search capabilities with SKU-based tracking
 - Category-driven organization system
-- Stock level monitoring and alerts
 - Purchase price and selling price management
 - Batch update capabilities for efficient inventory maintenance
 
@@ -71,3 +70,6 @@ python migrate.py
 ```sh
 python run.py
 ```
+
+> Username : john  
+> Password : 1234  
